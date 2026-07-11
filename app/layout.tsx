@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./key-save.css";
 
 export const metadata: Metadata = { title: "Prompt Playground", description: "Compare LLM responses with OpenRouter" };
 
