@@ -1,0 +1,8 @@
+node_modules
+.next
+.secrets
+.secrets.*
+!.secrets.example
+.env*.local
+coverage
+*.tsbuildinfo
