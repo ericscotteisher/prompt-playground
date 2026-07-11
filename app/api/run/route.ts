@@ -1,4 +1,3 @@
-import { getOpenRouterKey } from "@/lib/secrets";
 import type { ModelConfig, RunEvent } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -41,8 +40,8 @@ async function runModel(controller: ReadableStreamDefaultController, key: string
 }
 
 export async function POST(request: Request) {
-  const key = await getOpenRouterKey();
-  if (!key) return Response.json({ error: "Add OPENROUTER_API_KEY to .secrets" }, { status: 503 });
+  const key = request.headers.get("x-openrouter-key")?.trim();
+  if (!key) return Response.json({ error: "Enter your OpenRouter key using the Key button" }, { status: 401 });
   let body: { system?: unknown; user?: unknown; models?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON body" }, { status: 400 }); }
   if (typeof body.system !== "string" || typeof body.user !== "string" || !Array.isArray(body.models) || body.models.length < 1 || body.models.length > 12) return Response.json({ error: "Provide prompts and 1–12 model configurations" }, { status: 400 });

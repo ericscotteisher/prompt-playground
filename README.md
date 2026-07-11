@@ -10,24 +10,12 @@ Compare streamed responses from OpenAI, Anthropic, xAI, and Google models throug
 ## Setup
 
 1. Run `npm install`.
-2. Create a file named `.secrets` in the project root.
-3. Add your OpenRouter API key to `.secrets` using this exact variable name:
-
-   ```dotenv
-   OPENROUTER_API_KEY=your_openrouter_api_key
-   ```
-
-   You can also copy the included example first:
-
-   ```bash
-   cp .secrets.example .secrets
-   ```
-
-4. Run `npm run dev`.
-5. Open [http://localhost:3000](http://localhost:3000).
+2. Run `npm run dev`.
+3. Open [http://localhost:3000](http://localhost:3000).
+4. Click **Key** in the upper-right corner and enter your OpenRouter API key.
 
 ## Keeping your key private
 
-The `.secrets` file is ignored by Git and must never be committed or shared. Only `.secrets.example`, which contains a placeholder rather than a real key, belongs in source control.
+Your key is stored only in your browser's local storage and is sent with requests to the app's server route, which forwards it to OpenRouter. It is not embedded in the project, committed to Git, or stored in a server-side file.
 
-The application reads `OPENROUTER_API_KEY` only in server routes; it is never sent to or stored by browser code. Prompt and model configuration are stored locally in the browser, while results are not persisted.
+On a public deployment, use a deployment you trust: the key passes through that deployment's server when you run a prompt. Prompt and model configuration are also stored locally in the browser, while results are not persisted.

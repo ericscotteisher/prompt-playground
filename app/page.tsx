@@ -6,6 +6,8 @@ import rehypeSanitize from "rehype-sanitize";
 import type { CatalogModel, ModelConfig, ModelSettings, RunEvent, RunResult } from "@/lib/types";
 
 const STORAGE_KEY = "prompt-playground:v1";
+const KEY_STORAGE_KEY = "prompt-playground:openrouter-key";
+const THEME_STORAGE_KEY = "prompt-playground:theme";
 const DEFAULT_SYSTEM_PROMPT = "You are an asshole scientist that will always teach people how something works in a pedantic way regardless of whether they are asking you a question or not. You will find a subject related to what they write to you and give them back a sassy educational response. ";
 const DEFAULT_USER_PROMPT = "Why is the sky blue?";
 const starters: ModelConfig[] = [
@@ -20,11 +22,14 @@ export default function Playground() {
   const [system, setSystem] = useState(DEFAULT_SYSTEM_PROMPT); const [user, setUser] = useState(DEFAULT_USER_PROMPT);
   const [models, setModels] = useState<ModelConfig[]>(starters); const [catalog, setCatalog] = useState<CatalogModel[]>([]);
   const [results, setResults] = useState<Record<string, RunResult>>({}); const [editing, setEditing] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState(""); const [keyOpen, setKeyOpen] = useState(false); const [showKey, setShowKey] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [catalogError, setCatalogError] = useState(""); const abortRef = useRef<AbortController | null>(null); const hydrated = useRef(false);
   const running = Object.values(results).some(r => r.status === "streaming");
 
-  useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"); if (saved?.version === 1) { setSystem(saved.system || DEFAULT_SYSTEM_PROMPT); setUser(saved.user || DEFAULT_USER_PROMPT); if (Array.isArray(saved.models) && saved.models.length) setModels(saved.models); } } catch {} hydrated.current = true; }, []);
+  useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"); if (saved?.version === 1) { setSystem(saved.system || DEFAULT_SYSTEM_PROMPT); setUser(saved.user || DEFAULT_USER_PROMPT); if (Array.isArray(saved.models) && saved.models.length) setModels(saved.models); } setApiKey(localStorage.getItem(KEY_STORAGE_KEY) ?? ""); const savedTheme = localStorage.getItem(THEME_STORAGE_KEY); setTheme(savedTheme === "light" || savedTheme === "dark" ? savedTheme : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch {} hydrated.current = true; }, []);
   useEffect(() => { if (hydrated.current) localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, system, user, models })); }, [system, user, models]);
+  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { fetch("/api/models").then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error); setCatalog(j.models); }).catch(e => setCatalogError(e.message)); }, []);
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -38,9 +43,9 @@ export default function Playground() {
     });
   }
   async function submit(only?: ModelConfig) {
-    if (running) return; const selected = only ? [only] : models; const controller = new AbortController(); abortRef.current = controller;
+    if (running) return; if (!apiKey.trim()) { setKeyOpen(true); return; } const selected = only ? [only] : models; const controller = new AbortController(); abortRef.current = controller;
     setResults(current => ({ ...current, ...Object.fromEntries(selected.map(m => [m.instanceId, { ...emptyResult(), status: "streaming" }])) }));
-    try { const response = await fetch("/api/run", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ system, user, models: selected }) });
+    try { const response = await fetch("/api/run", { method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json", "X-OpenRouter-Key": apiKey.trim() }, body: JSON.stringify({ system, user, models: selected }) });
       if (!response.ok) { const j = await response.json(); throw new Error(j.error ?? "Unable to start run"); } if (!response.body) throw new Error("Missing response stream");
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
       while (true) { const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); const lines = buffer.split("\n"); buffer = lines.pop() ?? ""; for (const line of lines) if (line.trim()) applyEvent(JSON.parse(line)); }
@@ -49,9 +54,11 @@ export default function Playground() {
   }
   function cancel() { abortRef.current?.abort(); models.forEach(m => { if (results[m.instanceId]?.status === "streaming") applyEvent({ type: "cancelled", instanceId: m.instanceId }); }); }
   const active = editing ? models.find(m => m.instanceId === editing) : undefined;
+  function updateKey(value: string) { setApiKey(value); if (value) localStorage.setItem(KEY_STORAGE_KEY, value); else localStorage.removeItem(KEY_STORAGE_KEY); }
+  function toggleTheme() { const next = theme === "light" ? "dark" : "light"; setTheme(next); localStorage.setItem(THEME_STORAGE_KEY, next); }
 
   return <main className="playground">
-    <header>Playground</header>
+    <header><span>Playground</span><div className="top-actions"><div className="key-control"><button className={`top-button ${apiKey ? "has-key" : ""}`} onClick={() => setKeyOpen(v => !v)} aria-expanded={keyOpen}>Key</button>{keyOpen && <div className="key-popover"><label><span>OpenRouter Key</span><div><input autoFocus type={showKey ? "text" : "password"} value={apiKey} onChange={e => updateKey(e.target.value)} placeholder="sk-or-v1-…" autoComplete="off"/><button onClick={() => setShowKey(v => !v)}>{showKey ? "Hide" : "Show"}</button></div></label><p>Stored only in this browser.</p></div>}</div><button className="top-button theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`} title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>{theme === "light" ? "☾" : "☀"}</button></div></header>
     <section className="content">
       <aside className="prompt-box">
         <div className="prompt-fields"><PromptField label="System" value={system} onChange={setSystem}/><PromptField label="User" value={user} onChange={setUser}/></div>
